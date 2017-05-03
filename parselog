@@ -1,0 +1,102 @@
+#!/usr/bin/php
+<?php
+
+    $linesToTail = 100000;
+    $validOptions = [
+                        'all',
+                        'fatal',
+                        'notice',
+                        'warning',
+                        'parse',
+                        'logged',
+                    ];
+    $scriptError = "";
+    // If no arguments given
+        if(! isset($argv[1]) ):
+            $scriptError .= "\033[31m" . "Please specify option(s): [ all, fatal, notice, warning, parse, logged ]" . "\033[0m" .  PHP_EOL;
+            echo $scriptError;
+            return;
+        endif;
+    // If argument is given
+        $arguments = $argv;
+        unset($arguments[0]);
+        foreach($arguments as $argument):
+            if( ! in_array($argument, $validOptions) ):
+                $scriptError .= "Unrecognized option: " . $argument . PHP_EOL;
+                $scriptError .= "Please specify option(s): [ all, fatal, notice, warning, parse, logged ]" . PHP_EOL;
+                echo $scriptError;
+                return;
+            endif;
+        endforeach;
+    // Set Log File
+        $log_file = $_SERVER['HOME'] . '/error_log';
+
+
+        $lastNlines = `tail -$linesToTail $log_file`;
+    // Patterns
+        $dateTimePattern = "#(\[[0-3]{1}[0-9]{1}-[A-z]*-[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} America\/New_York\])#";
+        $error_pattern_fatal    = "# PHP Fatal error:#";
+        $error_pattern_notice   = "# PHP Notice:#";
+        $error_pattern_warning  = "# PHP Warning:#";
+        $error_pattern_parse    = "# PHP Parse error:#";
+    $newArray =  preg_split ( $dateTimePattern , $lastNlines, NULL, PREG_SPLIT_DELIM_CAPTURE );
+
+    $logArrays = [];
+    $loopArray = [];
+
+    $time = "";
+        foreach($newArray as $key => $value):
+            // Date Time
+                if( preg_match($dateTimePattern, $value) ):
+                    $time = $value;
+                    continue;
+                endif;
+            // Errors
+                if( preg_match($error_pattern_fatal, $value) ):
+                    if(in_array('fatal', $arguments) || in_array('all', $arguments) ):
+                        $loopArray['time'] = $time;
+                        $loopArray['type'] = "\033[31m" . 'FATAL_ERROR' . "\033[0m";
+                        $loopArray['message'] = $value;
+                    endif;
+
+                elseif( preg_match($error_pattern_notice, $value) ):
+                    if(in_array('notice', $arguments) || in_array('all', $arguments) ):
+                        $loopArray['time'] = $time;
+                        $loopArray['type'] = "\033[35m" . 'NOTICE' . "\033[0m";
+                        $loopArray['message'] = $value;
+                    endif;
+                elseif( preg_match($error_pattern_warning, $value) ):
+                    if(in_array('warning', $arguments) || in_array('all', $arguments) ):
+                        $loopArray['time'] = $time;
+                        $loopArray['type'] = "\033[33m" . 'WARNING' . "\033[0m";
+                        $loopArray['message'] = $value;
+                    endif;
+
+                elseif( preg_match($error_pattern_parse, $value) ):
+                    if(in_array('parse', $arguments) || in_array('all', $arguments) ):
+                        $loopArray['time'] = $time;
+                        $loopArray['type'] = "\033[31m" . 'PARSE' . "\033[0m";
+                        $loopArray['message'] = $value;
+                    endif;
+                else:
+                    if(in_array('logged', $arguments) || in_array('all', $arguments) ):
+                        $loopArray['time'] = $time;
+                        $loopArray['type'] = "\033[32m" .  'LOGGED' . "\033[0m";
+                        $loopArray['message'] = $value;
+                    endif;
+                endif;
+            if( count($loopArray) ):
+                $logArrays[] = $loopArray;
+            endif;
+        endforeach;
+        // Print the log entries cleanly
+        foreach($logArrays as $index => $logArray):
+            echo  $logArray['type'] . " ";
+            echo $index . PHP_EOL;
+                $datetime = substr($logArray['time'], 1);
+                $datetime = substr($datetime, 0, -1);
+                $datetime = explode(' ', $datetime);
+            echo $datetime[0] . " " . date( 'h:i A', strtotime($datetime[1]) ) .  PHP_EOL;
+            echo $logArray['message'] . PHP_EOL;
+        endforeach;
+        echo "Peak Memory Usage: " . (memory_get_peak_usage()) . PHP_EOL;
